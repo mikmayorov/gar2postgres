@@ -1,8 +1,9 @@
 #!/usr/bin/perl
 
 use warnings;
-use strict;
-use v5.10;
+use strict qw/vars/;
+use feature qw/say/;
+use autodie;
 
 use JSON::Parse qw/parse_json/;
 use Data::Dump qw/dump dd/;
@@ -10,29 +11,78 @@ use Config::Simple;
 use Getopt::Long;
 use DBI;
 
-my %cfg;
 my $cfgfile = "gar.cfg";
-my $verbose = 0;
-my $initdb = 0;
-my %regions;
+my ( %cfg,
+     $initdb,
+     $addregion,
+     $delregion,
+     $update,
+     $showstatus,
+     %regions
+   );
 
-GetOptions ('config=s' => \$cfgfile, 'verbose' => \$verbose, 'initdb' => \$initdb);
+GetOptions ( 'config=s' => \$cfgfile,
+             'init=s' => \$initdb,
+             'add-region=s' => \$addregion,
+             'del-region=s' => \$delregion,
+             'update=s' => \$update,
+             'show-status=s' => \$showstatus
+           );
+
 Config::Simple->import_from($cfgfile, \%cfg) or die Config::Simple->error();
+
+if ( defined $cfg{logfile} ) {
+    open (STDOUT, '>>', "$cfg{workfiles}/$cfg{logfile}");
+    open (STDERR, '>&', STDOUT);
+}
+
+logging("Будем что-то делать",2);
+
+exit;
+
+my $verbose;
 
 my $dbh = DBI->connect("dbi:Pg:dbname=$cfg{db_name};host=$cfg{db_host}", $cfg{db_user}, $cfg{db_password},
                        { PrintWarn => 0, PrintError => 0, RaiseError => 1, AutoCommit => 0 }) || die "Не могу соедениться с базой данных";
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+my $basedir = $0;
+$basedir =~ s/gar.pl$//;
+
+GetOptions ('config=s' => \$cfgfile, 'verbose' => \$verbose);
+Config::Simple->import_from($cfgfile, \%cfg) or die Config::Simple->error();
+
+
 # проверка наличия файлов для обновления и их скачивание
 (loadgarfiles() != 0) && die "ошибка получения файлов обновлекний";
 
-# получение текущей информации о загруженных обновлениях из БД по интересующим нас регионам
-say "Синхронизируем информацию по следующим регионам: " . join(",", @{$cfg{regions}});
-foreach my $curregion ( @{$cfg{regions}} ) {
+# если нет ни одной записи в таблице регионов, то парсим полный файл и создаем нужные таблицы и готовим нужный формат для вывода
+my $rowscount = $dbh->selectcol_arrayref("SELECT count(*) FROM region");
+$rowscount = $$rowscount[0];
+if ( $rowscount == 0 ) {
+    say "Создаем структуру справочника ГАР";
+    my $fullzip = $dbh->selectcol_arrayref("SELECT gar_xml_full_local_file FROM version where gar_xml_full_local_file is not null order by version_id desc limit 1");
+    $fullzip = $$fullzip[0];
+    system("${basedir}make-initdb.pl $fullzip ${basedir}");
 }
-
-if ( $initdb ) {
-    say "Создание объектов в БД $cfg{db_name} на $cfg{db_host}";
-    }
+!
+# получение текущей информации о загруженных обновлениях из БД по интересующим нас регионам
+#!say "Синхронизируем информацию по следующим регионам: " . join(",", @{$cfg{regions}});
+#!foreach my $curregion ( @{$cfg{regions}} ) {
+#!}
 
 $dbh->disconnect;
 
@@ -50,7 +100,7 @@ sub loadgarfiles {
         $allfiles = <$fh>;
         close $fh;
     }
-    
+
     if (not defined $allfiles) {
         say "Ошибка получения файла $cfg{urlallfiles}";
         return -1;
@@ -156,4 +206,15 @@ sub downloadfile {
     my $exitcode = system(@wget);
     if ($exitcode == 0) { rename("$cfg{downloadfiles}/$save.part","$cfg{downloadfiles}/$save"); return 0; }
     return 1;
+}
+
+
+##########
+
+sub logging {
+    my $msg = shift;
+    my $level = shift;
+    if ( $level <= $cfg{loglevel} ) {
+        say $msg;
+    }
 }
