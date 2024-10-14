@@ -29,6 +29,7 @@ foreach my $cf (split (/\n/,$filelist)) {
     say STDERR "$cf";
     $cf =~ /AS_(.+?)_\d/;
     my $table=$1;
+    local $/="/><";
     open(my $FH, "unzip -p $ARGV[0] $cf |");
     binmode $FH, ":utf8";
     while ( <$FH> ) {
