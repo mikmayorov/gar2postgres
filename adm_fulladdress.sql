@@ -1,7 +1,6 @@
 CREATE OR REPLACE FUNCTION adm_fulladdress(_objectid bigint, _debug integer DEFAULT 0) RETURNS text AS
 $BODY$
 DECLARE
-    _region int;
     _rt text;
     _levelid int;
     _name text;
@@ -21,10 +20,30 @@ BEGIN
     SELECT levelid INTO _levelid FROM reestr_objs WHERE objectid = _objectid;
     CASE _levelid
         WHEN 1,2,3,4,5,6,7,8,13,14,15,16 THEN -- объект адреса
-            SELECT concat_ws('' '', (SELECT lower(name) from addr_obj_types where shortname=A.typename and level=A.level),A.name) FROM addr_objs as A WHERE objectid = _objectid INTO _name;
+            SELECT concat_ws('' '', (SELECT lower(name)
+                                        FROM addr_obj_types
+                                        WHERE shortname=A.typename and
+                                              level=A.level),
+                                    A.name)
+                FROM addr_objs as A
+                WHERE objectid = _objectid
+                INTO _name;
         WHEN 9 THEN -- земля
         WHEN 10 THEN -- строение
-            SELECT concat_ws('' '',(SELECT lower(name) from house_types where house_types.id=A.housetype),housenum,(SELECT lower(name) from house_add_types where house_add_types.id=A.addtype1),addnum1,(SELECT lower(name) from house_add_types where house_add_types.id=A.addtype2),addnum2) FROM houses as A WHERE objectid = _objectid INTO _name;
+            SELECT concat_ws('' '', (SELECT lower(name)
+                                        FROM house_types WHERE house_types.id=A.housetype),
+                                    housenum,
+                                    (SELECT lower(name)
+                                        FROM house_add_types
+                                        WHERE house_add_types.id=A.addtype1),
+                                    addnum1,
+                                    (SELECT lower(name)
+                                        FROM house_add_types
+                                        WHERE house_add_types.id=A.addtype2),
+                                    addnum2)
+                FROM houses as A
+                WHERE objectid = _objectid
+                INTO _name;
         WHEN 11 THEN -- помещение
             SELECT name FROM houses WHERE objectid = _objectid INTO _name;
         WHEN 17 THEN -- парковка
