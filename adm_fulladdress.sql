@@ -9,37 +9,37 @@ BEGIN
     IF _debug > 5 THEN
         RAISE NOTICE 'DEBUG[5]: find objectid: %', objectid;
     END IF;
-    SELECT * INTO _data FROM adm_hierarchies WHERE objectid = _objectid;
+    SELECT * INTO _data FROM adm_hierarchy WHERE objectid = _objectid;
     IF NOT FOUND THEN
         RETURN NULL;
     END IF;
     IF _debug > 5 THEN
-        RAISE NOTICE 'DEBUG[5]: find in adm_hierarchies -> objectid: %, parentobjid: %', _data.objectid, _data.parentobjid;
+        RAISE NOTICE 'DEBUG[5]: find in adm_hierarchy -> objectid: %, parentobjid: %', _data.objectid, _data.parentobjid;
     END IF;
     -- определяем в какой таблице искать информацию об этом object_id
-    SELECT levelid INTO _levelid FROM reestr_objs WHERE objectid = _objectid;
+    SELECT levelid INTO _levelid FROM reestr_objects WHERE objectid = _objectid;
     CASE _levelid
         WHEN 1,2,3,4,5,6,7,8,13,14,15,16 THEN -- объект адреса
-            SELECT concat_ws('' '', (SELECT lower(name)
+            SELECT concat_ws(' ', (SELECT lower(name)
                                         FROM addr_obj_types
                                         WHERE shortname=A.typename and
                                               level=A.level),
                                     A.name)
-                FROM addr_objs as A
+                FROM addr_obj as A
                 WHERE objectid = _objectid
                 INTO _name;
         WHEN 9 THEN -- земля
         WHEN 10 THEN -- строение
-            SELECT concat_ws('' '', (SELECT lower(name)
+            SELECT concat_ws(' ', (SELECT lower(name)
                                         FROM house_types WHERE house_types.id=A.housetype),
                                     housenum,
                                     (SELECT lower(name)
-                                        FROM house_add_types
-                                        WHERE house_add_types.id=A.addtype1),
+                                        FROM addhouse_types
+                                        WHERE id=A.addtype1),
                                     addnum1,
                                     (SELECT lower(name)
-                                        FROM house_add_types
-                                        WHERE house_add_types.id=A.addtype2),
+                                        FROM addhouse_types
+                                        WHERE id=A.addtype2),
                                     addnum2)
                 FROM houses as A
                 WHERE objectid = _objectid

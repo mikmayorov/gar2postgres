@@ -89,7 +89,7 @@ if ( defined $initdb ) {
                 if ($ccol =~ /date/ ) { $datatype="date"; }
                 elsif ($ccol =~ /guid|adrobjectid/ ) { $datatype="uuid"; }
                 elsif ($ccol =~ /^isa/ ) { $datatype="boolean"; }
-                elsif ($ccol =~ /id|level/ ) { $datatype="bigint"; }
+                elsif ($ccol =~ /id|level|housetype|addtype[12]/ ) { $datatype="bigint"; }
                 else { $datatype="text"; }
                 $SQL .= "\t" . $ccol . "\t $datatype,\n";
                 # массив с индексами
