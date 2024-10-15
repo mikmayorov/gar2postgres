@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION adm_fulladdress(_objectid bigint, _debug integer DEFAULT 0) RETURNS text AS
+CREATE OR REPLACE FUNCTION adm_address(_objectid bigint, _shortname boolean DEFAULT false, _debug integer DEFAULT 0) RETURNS text AS
 $BODY$
 DECLARE
     _rt text;
@@ -20,7 +20,7 @@ BEGIN
     SELECT levelid INTO _levelid FROM reestr_objects WHERE objectid = _objectid;
     CASE _levelid
         WHEN 1,2,3,4,5,6,7,8,13,14,15,16 THEN -- объект адреса
-            SELECT concat_ws(' ', (SELECT lower(name)
+            SELECT concat_ws(' ', (SELECT CASE WHEN _shortname THEN shortname ELSE name END
                                         FROM addr_obj_types
                                         WHERE shortname=A.typename and
                                               level=A.level),
@@ -29,6 +29,7 @@ BEGIN
                 WHERE objectid = _objectid
                 INTO _name;
         WHEN 9 THEN -- земля
+            SELECT number FROM steads WHERE objectid = _objectid INTO _name;
         WHEN 10 THEN -- строение
             SELECT concat_ws(' ', (SELECT lower(name)
                                         FROM house_types WHERE house_types.id=A.housetype),
@@ -45,13 +46,16 @@ BEGIN
                 WHERE objectid = _objectid
                 INTO _name;
         WHEN 11 THEN -- помещение
-            SELECT name FROM houses WHERE objectid = _objectid INTO _name;
+            SELECT number FROM apartments WHERE objectid = _objectid INTO _name;
+        WHEN 12 THEN -- комната
+            SELECT number FROM rooms WHERE objectid = _objectid INTO _name;
         WHEN 17 THEN -- парковка
+            SELECT number FROM carplaces WHERE objectid = _objectid INTO _name;
         ELSE
             RAISE EXCEPTION 'unknown levelid: % for objectid: %', _levelid, _objectid;
     END CASE;
     IF _data.parentobjid IS NOT NULL THEN
-        _rt := concat_ws(', ', adm_fulladdress(_data.parentobjid,_debug), _name);
+        _rt := concat_ws(', ', adm_address(_data.parentobjid,_shortname,_debug), _name);
     ELSE
         _rt := concat_ws(', ', _name, _rt);
     END IF;
