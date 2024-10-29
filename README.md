@@ -61,8 +61,8 @@ gar.pl --show-status - показывает текущий статус выгр
 
 Получить все объекты в г.Таганроге:
 
-WITH RECURSIVE res AS ( SELECT objectid from adm_hierarchy where parentobjid in (select objectid from addr_obj where name = 'Таганрог') and isactive UNION SELECT adm_hierarchy.objectid from adm_hierarchy JOIN res ON (adm_hierarchy.parentobjid = res.objectid ) ) SELECT * from res;
+WITH RECURSIVE res AS ( SELECT objectid from adm_hierarchy where parentobjid in (select objectid from addr_obj where name = 'Таганрог') and isactive UNION SELECT adm_hierarchy.objectid from adm_hierarchy JOIN res ON (adm_hierarchy.parentobjid = res.objectid ) ) SELECT objectid,adm_fulladdress(objectid) from res;
 
 Получить все многоквартирные дома в г. Таганроге:
 
-select houses.* from houses join houses_params using (objectid) where houses_params.typeid = 19 and houses.objectid in (WITH RECURSIVE res AS ( SELECT objectid from adm_hierarchy where parentobjid in (select objectid from addr_obj where name = 'Таганрог') and isactive UNION SELECT adm_hierarchy.objectid from adm_hierarchy JOIN res ON (adm_hierarchy.parentobjid = res.objectid ) ) SELECT * from res);
+select objectid,adm_fulladdress(objectid) from houses join houses_params using (objectid) where houses_params.typeid = 19 and houses.objectid in (WITH RECURSIVE res AS ( SELECT objectid from adm_hierarchy where parentobjid in (select objectid from addr_obj where name = 'Таганрог') and isactive UNION SELECT adm_hierarchy.objectid from adm_hierarchy JOIN res ON (adm_hierarchy.parentobjid = res.objectid ) ) SELECT * from res);

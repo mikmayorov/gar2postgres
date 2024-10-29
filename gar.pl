@@ -259,6 +259,7 @@ sub xml2table {
         next if not /^(\w+) .+$/;
         while ( /(\w+)="(.+?)"/g ) {
             $current_row[$columns_order{$1}] = $2;
+            $current_row[$columns_order{$1}] =~ s/&quot;/\"/g;
         }
         logging( join("\t", @current_row) . "\n", 10);
         $dbh->pg_putcopydata(join("\007", @current_row) . "\n");
