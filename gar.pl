@@ -201,10 +201,10 @@ if ( defined $update ) {
                     $dbh->do("DROP TABLE tmp_${table}_$$cregion[0]");
                     $dbh->commit;
                 }
-                $dbh->do("UPDATE region set version_sync = '$$delta[0]' WHERE region = $$cregion[0]");
-                $dbh->commit;
-                logging("Обновление региона завершено");
             }
+            $dbh->do("UPDATE region set version_sync = '$$delta[0]' WHERE region = $$cregion[0]");
+            $dbh->commit;
+            logging("Обновление региона завершено");
         }
     }
 }
