@@ -211,6 +211,17 @@ if ( defined $update ) {
 
 if ( defined $showstatus ) {
     logging("Статус локального хранилища", 1);
+    my $fullzip = $dbh->selectrow_arrayref("SELECT gar_xml_full_local_file,version_id FROM version where gar_xml_full_local_file is not null order by version_id desc limit 1");
+    my $version_id = $$fullzip[1];
+    $fullzip = $$fullzip[0];
+    my $currentid = ${$dbh->selectrow_arrayref("SELECT max(version_id) FROM version")}[0];
+    logging("Полный архив $version_id: $fullzip", 1);
+    logging("Последнее обновление $currentid", 1);
+    my $regions = $dbh->selectall_arrayref("SELECT * FROM region;");
+    foreach my $cregion ( @{$regions} ) {
+        logging("Регион " . $$cregion[0] . " текущая версия " . $$cregion[1],1);
+    }
+    
 }
 
 $dbh->disconnect;
