@@ -30,7 +30,7 @@ GetOptions ( 'config=s' => \$cfgfile,
              'add-region=s' => \$addregion,
              'del-region=s' => \$delregion,
              'update' => \$update,
-             'show-status=s' => \$showstatus
+             'show-status' => \$showstatus
            );
 
 Config::Simple->import_from($cfgfile, \%cfg) or die Config::Simple->error();
