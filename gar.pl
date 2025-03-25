@@ -245,11 +245,14 @@ sub xml2table {
     my @nulldata;
     my %columns_order;
 
-    my $columns = $dbh->selectall_arrayref("select CASE WHEN column_name = 'description' THEN 'DESC' ELSE upper(column_name) END as column_name, ordinal_position - 1 as position from information_schema.columns where table_name = '$table' and table_schema = CURRENT_SCHEMA() order by ordinal_position;");
+    my $columns = $dbh->selectall_arrayref("select CASE WHEN column_name = 'description' THEN 'DESC' ELSE upper(column_name) END as column_name,
+                                                   ordinal_position - 1 as position from information_schema.columns
+                                                where table_name = '$table' and table_schema = CURRENT_SCHEMA() order by ordinal_position;");
     if (! defined $$columns[0]) {
         logging("Таблица $table отсутствует в БД. Пропускаем импорт данного файла.");
         return;
     }
+    # формируем заготовку для одной строки данных в правильном порядке ориентируясь на оригинальный порядок указанный в information_schema.columns
     foreach my $ccol ( @{$columns} ) {
         $columns_order{$$ccol[0]} = $$ccol[1];
         if ( $$ccol[0] eq "REGION" ) {
@@ -382,7 +385,7 @@ sub xmlregionfiles {
     my $file = shift;
     my $region = shift;
     my @rt;
-    
+
     my $filelist=`unzip -qql $file | awk '{ print \$4 }'`;
 
     foreach my $cf (split (/\n/,$filelist)) {
