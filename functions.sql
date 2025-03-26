@@ -5,7 +5,7 @@ SET search_path TO gar
 AS $BODY$
 BEGIN
     IF _t ~ '\.$' THEN
-    ELSIF _t ~ '(-|\.|парк)' THEN
+    ELSIF _t ~ '(-|\.|парк|край)' THEN
     ELSE
         _t := _t || '.';
     END IF;
@@ -51,6 +51,9 @@ BEGIN
         RETURN NULL;
     END IF;
     SELECT parentobjid INTO _parentobjid FROM adm_hierarchy WHERE objectid = _objectid and isactive;
+    IF NOT FOUND THEN
+        RETURN NULL;
+    END IF;
     IF _debug > 5 THEN
         RAISE NOTICE 'DEBUG[5]: levelid: "%" parentobjid: "%"', _levelid, _parentobjid;
     END IF;

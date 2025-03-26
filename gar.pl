@@ -144,6 +144,7 @@ if ( defined $delregion ) {
 }
 
 if ( defined $update ) {
+    my $refresh = 0;
     logging("main:: Обновление БД");
     loadgarfiles();
     my $regions = $dbh->selectall_arrayref("SELECT * FROM region WHERE version_sync is null or version_sync < (select max(version_id) from version)");
@@ -165,6 +166,7 @@ if ( defined $update ) {
                 $$cregion[1] = $version_id;
             }
             $dbh->do("UPDATE region set version_sync = '$version_id' WHERE region = $$cregion[0]");
+            $refresh = 1;
         }
         logging("main:: Текущая версия региона $$cregion[1]",1);
         my $deltaupdate = $dbh->selectall_arrayref("SELECT version_id,gar_xml_delta_local_file FROM version where version_id > '$$cregion[1]' and gar_xml_delta_local_file is not null order by version_id");
@@ -205,6 +207,15 @@ if ( defined $update ) {
             $dbh->do("UPDATE region set version_sync = '$$delta[0]' WHERE region = $$cregion[0]");
             $dbh->commit;
             logging("main:: Обновление региона завершено");
+            $refresh = 1;
+        }
+    }
+    # выполняем SQL команды после обновления всех регионов
+    if ( $refresh ) {
+        my $file = "${cmddir}refresh.sql";
+        if ( -r $file ) {
+            logging("main:: выполняем SQL команды из $file",1);
+            DBIx::RunSQL->run_sql_file(verbose => $cfg{loglevel} - 2, dbh => $dbh, sql => $file);
         }
     }
 }
