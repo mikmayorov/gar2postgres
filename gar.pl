@@ -37,7 +37,7 @@ Config::Simple->import_from($cfgfile, \%cfg) or die Config::Simple->error();
 
 # базовый каталог запуска
 $0 =~ /^(.+\/).+?.pl$/;
-my $cmddir = $1;
+our $cmddir = $1;
 
 # определяем куда выводить логи
 if ( defined $cfg{logfile} ) {
@@ -50,10 +50,10 @@ my $dbh = DBI->connect("dbi:Pg:dbname=$cfg{db_name};host=$cfg{db_host}", $cfg{db
 
 
 if ( defined $initdb ) {
-    logging("Инициализация БД по региону $initdb",1);
+    logging("main:: Инициализация БД по региону $initdb",1);
     my $file = "${cmddir}init-version.sql";
     DBIx::RunSQL->run_sql_file(verbose => $cfg{loglevel} - 2, dbh => $dbh, sql => $file);
-    logging("Созданы служебные таблицы из файла $file",1);
+    logging("main:: Созданы служебные таблицы из файла $file",1);
     loadgarfiles();
 
     my @index;
@@ -61,12 +61,12 @@ if ( defined $initdb ) {
     my $version_id = $$fullzip[1];
     $fullzip = $$fullzip[0];
     if ( ! defined $fullzip ) {
-        logging("Отсутствует $fullzip. Создание структуры невозможно.",1);
+        logging("main:: Отсутствует $fullzip. Создание структуры невозможно.",1);
         die;
     }
     foreach my $cregion ( ( 0, $initdb ) ) {
         foreach my $cfile ( xmlregionfiles($fullzip, $cregion) ) {
-            logging("Анализ структуры $cfile",2);
+            logging("main:: Анализ структуры $cfile",2);
             $cfile =~ /AS_(.+?)_\d/;
             my $table=lc($1);
             my %columns;
@@ -107,7 +107,7 @@ if ( defined $initdb ) {
                 $SQL .= "\tregion\tint";
                 $SQL .= "\n\t) PARTITION BY list (region)\n";
             }
-            logging($SQL, 3);
+            logging("main:: $SQL", 3);
             $dbh->do($SQL);
         }
     }
@@ -115,74 +115,74 @@ if ( defined $initdb ) {
     foreach my $cindex ( @index ) {
         $dbh->do($cindex);
     }
-    logging("Инициализация БД завершена. Добавте необходимые регионы.",1);
+    logging("main:: Инициализация БД завершена. Добавте необходимые регионы.",1);
     $dbh->commit;
 }
 
 if ( defined $addregion ) {
-    logging("Добавление нового региона: $addregion", 1);
+    logging("main:: Добавление нового региона: $addregion", 1);
     my $region_tables = $dbh->selectall_arrayref("SELECT table_name from information_schema.tables where table_schema = current_schema() and table_name in (select relname FROM pg_class where relkind = 'p')");
     foreach my $ctable ( @{$region_tables} ) {
-        logging("Добавляем $$ctable[0] для региона $addregion",2);
+        logging("main:: Добавляем $$ctable[0] для региона $addregion",2);
         $dbh->do("CREATE TABLE " . $$ctable[0] . "_$addregion PARTITION OF " . $$ctable[0] . " FOR VALUES IN ($addregion)");
     }
     $dbh->do("INSERT INTO region VALUES ($addregion, NULL)");
-    logging("Инициализация нового региона завершена.",1);
+    logging("main:: Инициализация нового региона завершена.",1);
     $dbh->commit;
 }
 
 if ( defined $delregion ) {
-    logging("Удаление региона: $delregion", 1);
+    logging("main:: Удаление региона: $delregion", 1);
     my $region_tables = $dbh->selectall_arrayref("SELECT table_name from information_schema.tables where table_schema = current_schema() and table_name like '%$delregion'");
     foreach my $ctable ( @{$region_tables} ) {
-        logging("Удаляем $$ctable[0]",2);
+        logging("main:: Удаляем $$ctable[0]",2);
         $dbh->do("DROP TABLE " . $$ctable[0]);
     }
     $dbh->do("DELETE FROM region WHERE region = $delregion");
-    logging("Удаление региона завершено.",1);
+    logging("main:: Удаление региона завершено.",1);
     $dbh->commit;
 }
 
 if ( defined $update ) {
-    logging("Обновление БД");
+    logging("main:: Обновление БД");
     loadgarfiles();
     my $regions = $dbh->selectall_arrayref("SELECT * FROM region WHERE version_sync is null or version_sync < (select max(version_id) from version)");
     foreach my $cregion ( @{$regions} ) {
-        logging("Обновляем регион " . $$cregion[0],1);
+        logging("main:: Обновляем регион " . $$cregion[0],1);
         if ( ! defined $$cregion[1]) {
-            logging("Первое обновление региона",1);
             my $fullzip = $dbh->selectrow_arrayref("SELECT gar_xml_full_local_file,version_id FROM version where gar_xml_full_local_file is not null order by version_id desc limit 1");
             my $version_id = $$fullzip[1];
             $fullzip = $$fullzip[0];
+            logging("main:: Первое обновление региона из последнего полного дампа $fullzip",1);
             foreach my $cfile ( xmlregionfiles($fullzip, $$cregion[0]) ) {
                 $cfile =~ /AS_(.+?)_\d/;
                 my $table = lc($1);
                 if ($$cregion[0] ne "0") {
                     $table .= "_" . $$cregion[0];
-                }               
-                logging("Загружаем $cfile из $fullzip в таблицу $table",1);
+                }
+                logging("main:: Загружаем $cfile из $fullzip в таблицу $table",1);
                 xml2table($fullzip, $cfile, $table);
-                $dbh->do("UPDATE region set version_sync = '$version_id' WHERE region = $$cregion[0]");
                 $$cregion[1] = $version_id;
             }
+            $dbh->do("UPDATE region set version_sync = '$version_id' WHERE region = $$cregion[0]");
         }
-        logging("Текущая версия региона $$cregion[1]",1);
+        logging("main:: Текущая версия региона $$cregion[1]",1);
         my $deltaupdate = $dbh->selectall_arrayref("SELECT version_id,gar_xml_delta_local_file FROM version where version_id > '$$cregion[1]' and gar_xml_delta_local_file is not null order by version_id");
         foreach my $delta ( @{$deltaupdate} ) { 
-            logging("Применяем обновление $$delta[0]",1);
+            logging("main:: Применяем обновление $$delta[0]",1);
             foreach my $cfile ( xmlregionfiles($$delta[1], $$cregion[0]) ) {
                 $cfile =~ /AS_(.+?)_\d/;
                 my $table = lc($1);
                 if ($$cregion[0] eq "0") {
                     # справочники из корня всегда идут с полной выгрузкой
                     # очищаем и загружаем их полностью
-                    logging("Очищаем таблицу $table", 2);
+                    logging("main:: Очищаем таблицу и инициализируем текущими данными $table", 1);
                     $dbh->do("TRUNCATE TABLE $table");
                     xml2table($$delta[1],$cfile,$table);
                 }
                 else {
                     # загружаем обновление в отдельную временную таблицу
-                    logging("Создаем временную таблицу tmp_${table}_$$cregion[0]", 2);
+                    logging("main:: Создаем временную таблицу tmp_${table}_$$cregion[0]", 1);
                     $dbh->do("CREATE TABLE tmp_${table}_$$cregion[0] ( LIKE $table )");
                     xml2table($$delta[1],$cfile,"tmp_${table}_$$cregion[0]");
                     # синхронизируем таблицы
@@ -195,7 +195,7 @@ if ( defined $update ) {
                     else {
                         $id = "id";
                     }
-                    logging("Синхронизируем временную таблицу tmp_${table}_$$cregion[0] и основную ${table}_$$cregion[0] используя $id", 2);
+                    logging("main:: Синхронизируем временную таблицу tmp_${table}_$$cregion[0] и основную ${table}_$$cregion[0] используя $id", 2);
                     $dbh->do("delete from ${table}_$$cregion[0] where $id in (select $id from tmp_${table}_$$cregion[0])");
                     $dbh->do("insert into ${table}_$$cregion[0] select * from tmp_${table}_$$cregion[0]");
                     $dbh->do("DROP TABLE tmp_${table}_$$cregion[0]");
@@ -204,24 +204,24 @@ if ( defined $update ) {
             }
             $dbh->do("UPDATE region set version_sync = '$$delta[0]' WHERE region = $$cregion[0]");
             $dbh->commit;
-            logging("Обновление региона завершено");
+            logging("main:: Обновление региона завершено");
         }
     }
 }
 
 if ( defined $showstatus ) {
-    logging("Статус локального хранилища", 1);
+    say "Статус локального хранилища";
     my $fullzip = $dbh->selectrow_arrayref("SELECT gar_xml_full_local_file,version_id FROM version where gar_xml_full_local_file is not null order by version_id desc limit 1");
     my $version_id = $$fullzip[1];
     $fullzip = $$fullzip[0];
     my $currentid = ${$dbh->selectrow_arrayref("SELECT max(version_id) FROM version")}[0];
-    logging("Полный архив $version_id: $fullzip", 1);
-    logging("Последнее обновление $currentid", 1);
+    say "Полный архив $version_id: $fullzip";
+    say "Последнее обновление $currentid";
     my $regions = $dbh->selectall_arrayref("SELECT * FROM region;");
     foreach my $cregion ( @{$regions} ) {
-        logging("Регион " . $$cregion[0] . " текущая версия " . $$cregion[1],1);
+        say "\tРегион " . $$cregion[0] . " текущая версия " . $$cregion[1];
     }
-    
+
 }
 
 $dbh->disconnect;
@@ -244,12 +244,17 @@ sub xml2table {
     my $table = shift;
     my @nulldata;
     my %columns_order;
+    my $nr = 0;
+    my $fr = 0;
+    my $debug_data = 0;
+    my $xmldata;
+    my $sqldata;
 
     my $columns = $dbh->selectall_arrayref("select CASE WHEN column_name = 'description' THEN 'DESC' ELSE upper(column_name) END as column_name,
                                                    ordinal_position - 1 as position from information_schema.columns
                                                 where table_name = '$table' and table_schema = CURRENT_SCHEMA() order by ordinal_position;");
     if (! defined $$columns[0]) {
-        logging("Таблица $table отсутствует в БД. Пропускаем импорт данного файла.");
+        logging("xml2table:: Таблица $table отсутствует в БД. Пропускаем импорт данного файла.");
         return;
     }
     # формируем заготовку для одной строки данных в правильном порядке ориентируясь на оригинальный порядок указанный в information_schema.columns
@@ -263,32 +268,59 @@ sub xml2table {
             push @nulldata, "NULL"; 
         }
     }
+    logging("xml2table:: Таблица: $table (" . join(",", keys %columns_order) . ")", 1);
 
     local $/="><";
     open(my $FH, "unzip -p $zip $file |");
     $dbh->do("COPY $table FROM STDIN WITH NULL 'NULL' DELIMITER '\007'");
+
+    if ($debug_data) {
+        my $fname = $file;
+        $fname =~ s/\//_/;
+        $fname = $cmddir . $$ . "_" . $table . "_" . $fname;
+        open($xmldata, ">${fname}_xml");
+        open($sqldata, ">${fname}_sql");
+    }
+    logging("xml2table:: Загружаем данные",1);
     while ( <$FH> ) {
-        logging("$_\n", 10);
+        say $xmldata $_ if ( $debug_data );
+        $fr++;
+        logging("$nr: $_\n", 10);
         my @current_row = @nulldata;
         next if not /^(\w+) .+$/;
+        my $nc = 0;
         while ( /(\w+)="(.+?)"/g ) {
-            $current_row[$columns_order{$1}] = $2;
-            $current_row[$columns_order{$1}] =~ s/&quot;/\"/g;
+            my $var=$1;
+            my $val=$2;
+            $current_row[$columns_order{$var}] = $val;
+            $current_row[$columns_order{$var}] =~ s/&quot;/\"/g;
+            $current_row[$columns_order{$var}] =~ s/\\/\\\\/g;
+            $nc++;
         }
-        logging( join("\t", @current_row) . "\n", 10);
-        $dbh->pg_putcopydata(join("\007", @current_row) . "\n");
+        logging("xml2table:: " . join("\t", @current_row) . "\n", 10);
+        # вставляем строку если нашли хоть одно значение в строке
+        if ( $nc ) {
+            say $sqldata join("\007", @current_row) if ( $debug_data );
+            $dbh->pg_putcopydata(join("\007", @current_row) . "\n");
+            $nr++;
+        }
+    }
+    if ($debug_data) {
+        close $xmldata;
+        close $sqldata;
     }
     $dbh->pg_putcopyend();
     $dbh->commit;
+    logging("xml2table:: Успешно загружено $nr строк. Прочитано из файла $fr строк",1);
 }
 
 sub loadgarfiles {
     my $xmlfile = "$cfg{workfiles}/GetAllDownloadFileInfo";
-    logging("Загружаю список файлов доступных для скачивания $cfg{urlallfiles}", 1);
+    logging("loadgarfiles:: Загружаю список файлов доступных для скачивания $cfg{urlallfiles}", 1);
     downloadfile($cfg{urlallfiles}, $xmlfile);
     my $allremotefiles = `cat $xmlfile`;
     if (not defined $allremotefiles) {
-        logging("Ошибка чтения файла $xmlfile",1);
+        logging("loadgarfiles:: Ошибка чтения файла $xmlfile",1);
         die;
     }
     my $max_version_id = $dbh->selectcol_arrayref("SELECT max(version_id) FROM version");
@@ -299,11 +331,11 @@ sub loadgarfiles {
         $max_version_id = 0;
     }
     my $newfile = 0;
-    logging("Последнее обновление файлов в БД: $max_version_id",1);
+    logging("loadgarfiles:: Последнее обновление файлов в БД: $max_version_id",1);
     my $sth = $dbh->prepare("INSERT INTO version (export_date,version_id,gar_xml_delta_url,gar_xml_full_url) VALUES (?,?,?,?)");
     foreach my $curupdate ( @{parse_json($allremotefiles)} ) {
         if ( ${$curupdate}{VersionId} > $max_version_id ) {
-            logging("Доступно новое обновлении: ${$curupdate}{VersionId}", 1);
+            logging("loadgarfiles:: Доступно новое обновлении: ${$curupdate}{VersionId}", 1);
             $sth->execute(${$curupdate}{Date}, ${$curupdate}{VersionId}, ${$curupdate}{GarXMLDeltaURL}, ${$curupdate}{GarXMLFullURL});
             $newfile=1;
         }
@@ -314,19 +346,19 @@ sub loadgarfiles {
         my $version_id = $$fullzip[1];
         $fullzip = $$fullzip[0];
         if ( defined $fullzip ) {
-            logging("Полный архив: $fullzip Скачиваем доступные обновления.",1);
+            logging("loadgarfiles:: Полный архив: $fullzip Скачиваем доступные обновления.",1);
             my $deltafiles = $dbh->selectall_arrayref("SELECT gar_xml_delta_url,version_id FROM version where version_id > '$version_id' and gar_xml_delta_local_file is null");
             foreach my $curupdate ( @{$deltafiles} ) {
                 my $version_id = $$curupdate[1];
                 my $src = $$curupdate[0];
                 my $dst = "$cfg{workfiles}/" . $version_id . "_delta.zip";
-                logging("Пробуем скачать обновление $src",1);
+                logging("loadgarfiles:: Пробуем скачать обновление $src",1);
                 if ( downloadfile($src, $dst) == 0 ) {
                     $dbh->do("UPDATE version SET gar_xml_delta_local_file = '$dst' where version_id = '$version_id'");
-                    logging("Файл сохранен $dst",1);
+                    logging("loadgarfiles:: Файл сохранен $dst",1);
                 }
                 else {
-                    logging("Что-то пошло не так.",1);
+                    logging("loadgarfiles:: Что-то пошло не так.",1);
                 }
             }
         } 
@@ -335,13 +367,13 @@ sub loadgarfiles {
             my $version_id = $$src[1];
             $src = $$src[0];
             my $dst = "$cfg{workfiles}/" . $version_id . "_full.zip";
-            logging("Полный архив отсутствует. Качаем последний доступный полный архив $src",1);
+            logging("loadgarfiles:: Полный архив отсутствует. Качаем последний доступный полный архив $src",1);
             if ( downloadfile($src, $dst) == 0 ) {
                 $dbh->do("UPDATE version SET gar_xml_full_local_file = '$dst' where version_id = '$version_id'");
-                logging("Файл сохранен $dst",1);
+                logging("loadgarfiles:: Файл сохранен $dst",1);
             }
             else {
-                logging("Что-то пошло не так.",1);
+                logging("loadgarfiles:: Что-то пошло не так.",1);
             }
         }
         $dbh->commit;
@@ -354,11 +386,11 @@ sub downloadfile {
     my $dst = shift;
 
     if ( -e $dst ) {
-        logging("$dst уже существует. Не качаем.");
+        logging("downloadfile:: $dst уже существует. Не качаем.");
         return 0;
     }
 
-    logging("wget $src $dst", 1);
+    logging("downloadfile:: wget $src $dst", 1);
     my @wget=("/usr/bin/wget");
     if ( $cfg{wget_verbose} eq "yes" ) {
         push @wget, "--append-output=$cfg{workfiles}/wget.log";
@@ -374,10 +406,10 @@ sub downloadfile {
     my $exitcode = system(@wget);
     if ($exitcode == 0) {
         rename("$dst.part","$dst");
-        logging("успешное скачивание файла", 2);
+        logging("downloadfile:: успешное скачивание файла", 2);
         return 0;
     }
-    logging("не получилось скачать файл $src, wget вернул $exitcode");
+    logging("downloadfile:: не получилось скачать файл $src, wget вернул $exitcode");
     return $exitcode;
 }
 
