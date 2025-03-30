@@ -91,23 +91,22 @@ BEGIN
         WHEN 10 THEN -- строение / дом
             IF ( _address_format in (4) ) THEN
             ELSE
-                SELECT lower(concat_ws(' ', (SELECT CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END FROM house_types WHERE house_types.id=A.housetype), housenum,
-                                            (SELECT CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END FROM house_types WHERE house_types.id=A.addtype1), addnum1,
-                                            (SELECT CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END FROM house_types WHERE house_types.id=A.addtype2), addnum2
-                                      )
-                            )
+                SELECT concat_ws(' ', lower((SELECT CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END FROM house_types WHERE house_types.id=A.housetype)), housenum,
+                                            lower((SELECT CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END FROM house_types WHERE house_types.id=A.addtype1)), addnum1,
+                                            lower((SELECT CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END FROM house_types WHERE house_types.id=A.addtype2)), addnum2
+                                )
                     INTO _name FROM houses as A WHERE objectid = _objectid and isactive;
             END IF;
         WHEN 11 THEN -- помещение
             IF ( _address_format in (4) ) THEN
             ELSE
-                SELECT lower(concat_ws(' ', (select CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END from apartment_types where id = A.aparttype), number))
+                SELECT concat_ws(' ', lower((select CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END from apartment_types where id = A.aparttype)), number)
                     FROM apartments as A WHERE objectid = _objectid and isactive INTO _name;
             END IF;
         WHEN 12 THEN -- комната
             IF ( _address_format in (4) ) THEN
             ELSE
-                SELECT lower(concat_ws(' ', (select CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END from room_types where id = A.roomtype), number))
+                SELECT concat_ws(' ', lower((select CASE WHEN _abbr IS NULL THEN NULL WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END from room_types where id = A.roomtype)), number)
                     FROM rooms as A WHERE objectid = _objectid and isactive INTO _name;
             END IF;
         WHEN 17 THEN -- парковка
