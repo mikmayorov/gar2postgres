@@ -16,6 +16,4 @@ CREATE TABLE IF NOT EXISTS region (
     version_sync bigint REFERENCES version ( version_id ) ON DELETE restrict ON UPDATE restrict
 );
 
-insert into version (version_id,gar_xml_full_local_file) VALUES ('20241001','/home/mik/work/gar2/distfiles/20241001_full.zip');
-
 END;

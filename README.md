@@ -1,13 +1,15 @@
-# gar2
+# gar2postgres
 
-Синхронизация адресного справочника ГАР с локальной базой регионов.
+Синхронизация адресного справочника [ФИАС (Федеральная информационная адресная система)](https://fias.nalog.ru/) с локальной базой в postgres только нужных регионов.
 
 ## Getting started
 
-Для работы потребуються несколько библиотек Perl. Работа с исходными фалами выгрузки происходит исключительно через PIPE без распаковки архива на диск или создания временных файлов. Существенно экономится место и повышаеться скорость работы.
+Для работы потребуються несколько библиотек Perl. Работа с исходными файлами выгрузки происходит исключительно через PIPE без распаковки архива на диск или создания временных файлов. Существенно экономится место и повышаеться скорость работы.
 
-Установка для pacman:
+Установка для pacman (archlinux):
 ```shell
+pacman -S extra/wget
+pacman -S extra/unzip
 pacman -S extra/perl-json-parse
 pacman -S extra/perl-data-dump
 pacman -S extra/perl-config-simple
@@ -21,7 +23,7 @@ install from AUR https://aur.archlinux.org/packages/perl-dbix-runsql
 
 Отредактируйте файл с конфигурацией gar.cfg
 
-Создайте пользователя и схему. Имя схемы может быть любым. При работе с БД все действия выполняються в CURRENT_SCHEMA().
+Создайте пользователя и схему. При работе с БД все действия выполняються в CURRENT_SCHEMA(). По этому важно search_path прописать для пользователя. Имя схемы может быть любым, но лучше оставить gar, особенно если вы будите использовать functions.sql и using.sql. 
 ```shell
 CREATE ROLE gar LOGIN PASSWORD 'password';
 CREATE SCHEMA gar AUTHORIZATION gar;
@@ -108,17 +110,6 @@ UNION
 
 select objectid,adm_fulladdress(objectid) from houses join houses_params using (objectid) where houses_params.typeid = 19 and houses.objectid in (WITH RECURSIVE res AS ( SELECT objectid from adm_hierarchy where parentobjid in (select objectid from addr_obj where name = 'Таганрог') and isactive UNION SELECT adm_hierarchy.objectid from adm_hierarchy JOIN res ON (adm_hierarchy.parentobjid = res.objectid ) ) SELECT * from res);
 
-Полезные функции:
-1. adm_address(_objectid bigint, _address_format integer DEFAULT 1, _abbr boolean DEFAULT true, _debug integer DEFAULT 0)
-    Функция возвращает TEXT, адрес в соответствии с административным делением в различных форматах
-    _objectid - идентификатор ГАР (не uuid)
-    _address_format - формат адреса 1-8 (1 = полный адрес по умолчанию), вызвать с параметром 0 что-бы получить подсказку по всем вариантам использования
-    _abbr - какие название объектов использовать:
-      true - абривиатуры
-      false - полные
-      null - не выводить вообще
-    _debug - уровень отладочных сообщений. в обычном режиме 0
+Полезные функции можно взять в functions.sql
 
-2. adm_getallchildobjectid(_objectid bigint)
-    Функция возвращает ROWS (SELECT bigind), объекты которые имеют родителем _objectid по административному делению
-    _objectid - идентификатор ГАР (не uuid)
+В своем проекте я делаю MATERIALIZED VIEW в схеме public, что-бы было удобно работать с адресами. Смотрите using.sql

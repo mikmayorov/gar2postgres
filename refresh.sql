@@ -1,3 +1,4 @@
+-- Полезные SQL команды которые надо выполнить после update
 REFRESH MATERIALIZED VIEW public.gar_reestr_objects;
 REFRESH MATERIALIZED VIEW public.gar_addresses;
 REFRESH MATERIALIZED VIEW public.gar_houses;
