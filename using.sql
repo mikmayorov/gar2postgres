@@ -1,3 +1,6 @@
+-- Все объекты в БД я стараюсь создавать с комментариями.
+-- Смотрите их в первую очередь.
+
 BEGIN;
 
 DROP TABLE IF EXISTS gar_reestr_objects_catalog CASCADE;
