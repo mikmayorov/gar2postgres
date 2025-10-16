@@ -42,7 +42,7 @@ our $cmddir = $1;
 # определяем куда выводить логи
 if ( defined $cfg{logfile} ) {
     open (STDOUT, '>>', "$cfg{workfiles}/gar.log");
-    open (STDERR, '>&', STDOUT);
+    open(STDERR, '>&', \*STDOUT);
 }
 
 my $dbh = DBI->connect("dbi:Pg:dbname=$cfg{db_name};host=$cfg{db_host}", $cfg{db_user}, $cfg{db_password},
