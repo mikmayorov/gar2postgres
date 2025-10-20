@@ -28,6 +28,8 @@ install from AUR https://aur.archlinux.org/packages/perl-dbix-runsql
 CREATE ROLE gar LOGIN PASSWORD 'password';
 CREATE SCHEMA gar AUTHORIZATION gar;
 ALTER ROLE gar SET search_path TO 'gar';
+GRANT USAGE ON SCHEMA information_schema TO gar;
+GRANT SELECT ON ALL TABLES IN SCHEMA information_schema TO gar;
 ```
 
 После этого можно запустить `gar.pl --init=<регион>`. При первом старте он скачает список всех обновлений и закачает последнее полное обновление. Так-же создаст структуру ГАР в базе данных на основании парсинга полной выгрузки указанного региона. Запускать 1 раз или при изменении формата ГАР справочника. Эта операция пересоздает все таблицы.
