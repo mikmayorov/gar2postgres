@@ -23,21 +23,14 @@ AS $BODY$
 -- Функция возвращает адрес в соответствии с административным делением в различных форматах
 --
 -- _objectid - идентификатор ГАР (не uuid)
--- _address_format - формат адреса:
---     1 - полный адрес (по умолчанию) (levelid not check)
---     2 - адрес без региона ( >= 4 )
---     3 - адрес без региона и населенного пункта ( >=7 )
---     4 - только регион и населенный пункт  (1-6)
---     5 - только регион (1-3)
---     6 - только населенный пункт (4-6)
---     7 - элементы планировочной структуры и улично-дорожной (7-8)
---     8 - дом, квартира, комната, парковочное место или участок (9-12,17)
---     9 - объект без иерархии
+-- _address_format - формат адреса
 -- _abbr - какие название объектов использовать:
 --      true - аббревиатуры
 --      false - полные
 --      null - не выводить вообще
 -- _debug - уровень отладочных сообщений. в обычном режиме 0
+--
+-- ОБЩАЯ ИНФОРМАЦИЯ 
 --
 --  addr_obj
 --       1 - Субъект РФ, 
@@ -107,7 +100,8 @@ BEGIN
             ELSE
                 SELECT name, typename INTO _name, _prefixid FROM addr_obj WHERE objectid = _objectid and isactive;
                 IF _abbr IS NOT NULL THEN
-                    SELECT lower(CASE WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END) INTO _prefix FROM addr_obj_types WHERE level = _levelid and shortname = _prefixid;
+                    SELECT lower(CASE WHEN _abbr THEN abbr_dot_add(shortname) ELSE name END) INTO _prefix
+                        FROM addr_obj_types WHERE level = _levelid and shortname = _prefixid;
                     IF _levelid IN (1,2,3) THEN
                         _name := concat_ws(' ', _name, _prefix);
                     ELSE
@@ -178,23 +172,41 @@ SECURITY DEFINER
 SET search_path TO gar
 AS $BODY$
 -- 
--- Функция возвращает все объекты которые имеют родителем _objectid по административному делению
+-- Функция возвращает _objectid и все объекты в которых он родитель по административному делению
 --
     WITH RECURSIVE res AS (
         SELECT  reestr_objects.objectid
             FROM reestr_objects
             WHERE reestr_objects.isactive and reestr_objects.objectid = _objectid
     UNION
-        SELECT  reestr_objects.objectid
-            FROM reestr_objects
-                JOIN adm_hierarchy USING (objectid)
-                JOIN res ON (adm_hierarchy.parentobjid = res.objectid)
-            WHERE reestr_objects.isactive and adm_hierarchy.isactive
+        SELECT adm_hierarchy.objectid
+            FROM adm_hierarchy JOIN res ON (res.objectid = adm_hierarchy.parentobjid)
+            WHERE adm_hierarchy.isactive
     ) SELECT objectid from res;
-
 $BODY$;
 
-COMMENT ON FUNCTION gar.adm_getallchildobjectid IS 'возвращает все объекты которые имеют родителем objectid по административному делению';
+COMMENT ON FUNCTION gar.adm_getallchildobjectid IS 'Функция возвращает _objectid и все объекты в которых он родитель по административному делению';
+
+CREATE OR REPLACE FUNCTION gar.adm_getallparentobjectid(_objectid bigint) RETURNS TABLE (objectid bigint)
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path TO gar
+AS $BODY$
+-- 
+-- Функция возвращает _objectid и все объекты в которых он наследник по административному делению
+--
+    WITH RECURSIVE res AS (
+        SELECT  reestr_objects.objectid
+            FROM reestr_objects
+            WHERE reestr_objects.isactive and reestr_objects.objectid = _objectid
+    UNION
+        SELECT adm_hierarchy.parentobjid
+            FROM adm_hierarchy JOIN res USING (objectid)
+            WHERE adm_hierarchy.isactive and parentobjid > 0
+    ) SELECT objectid from res;
+$BODY$;
+
+COMMENT ON FUNCTION gar.adm_getallparentobjectid IS 'Функция возвращает _objectid и все объекты в которых он наследник по административному делению';
 
 CREATE OR REPLACE FUNCTION gar.adm_isparent(_objectid_pattern bigint, _objectid_check bigint) RETURNS boolean
 LANGUAGE SQL
@@ -211,3 +223,81 @@ SELECT CASE WHEN count(*) > 0 then true ELSE false END
 $BODY$;
 
 COMMENT ON FUNCTION gar.adm_isparent IS 'Функция возвращает TRUE если _objectid_check имеет в родителях _objectid_pattern';
+
+CREATE OR REPLACE FUNCTION gar.adm_address_tsvector(_objectid bigint, _debug integer DEFAULT 0) RETURNS tsvector
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO gar
+AS $BODY$
+-- 
+-- Собираем токены поиска в tsvector для полнотекстового поиска по адресу в соответствии с административным делением
+--
+-- _objectid - идентификатор ГАР (не uuid)
+-- _debug - уровень отладочных сообщений. в обычном режиме 0
+--
+DECLARE
+    _parentobjid bigint;
+    _levelid int;
+    _weight "char";
+    _tsvector tsvector := '';
+BEGIN
+    IF _debug > 5 THEN
+        RAISE NOTICE 'DEBUG[5]: objectid: "%"', _objectid;
+    END IF;
+    SELECT levelid INTO _levelid FROM reestr_objects WHERE objectid = _objectid and isactive;
+    IF NOT FOUND THEN
+        RETURN NULL;
+    END IF;
+    SELECT parentobjid INTO _parentobjid FROM adm_hierarchy WHERE objectid = _objectid and isactive;
+    IF NOT FOUND THEN
+        RETURN NULL;
+    END IF;
+    IF _debug > 5 THEN
+        RAISE NOTICE 'DEBUG[5]: levelid: "%" parentobjid: "%"', _levelid, _parentobjid;
+    END IF;
+
+    CASE _levelid
+        WHEN 7,8,10 THEN _weight := 'A';
+        WHEN 11,12 THEN _weight := 'B';
+        WHEN 5,6,9,17 THEN _weight := 'C';
+        ELSE _weight := 'D';
+    END CASE;
+    IF _debug > 5 THEN
+        RAISE NOTICE 'DEBUG[5]: weight: "%"', _weight;
+    END IF;
+
+    -- в зависимости от levelid определяем в какой таблице искать информацию об этом object_id
+    CASE _levelid
+        WHEN 1,2,3,4,5,6,7,8 THEN
+            SELECT setweight(to_tsvector(name), _weight) INTO _tsvector
+                FROM addr_obj WHERE objectid = _objectid and isactive;
+        WHEN 9 THEN -- земля
+            SELECT setweight(to_tsvector(number), _weight) INTO _tsvector
+                FROM steads WHERE objectid = _objectid and isactive;
+        WHEN 10 THEN -- строение / дом
+            SELECT setweight(to_tsvector(coalesce(housenum,'')), _weight) ||
+                   setweight(to_tsvector(coalesce(addnum1,'')), _weight) ||
+                   setweight(to_tsvector(coalesce(addnum2,'')), _weight) INTO _tsvector
+                FROM houses WHERE objectid = _objectid and isactive;
+        WHEN 11 THEN -- помещение
+            SELECT setweight(to_tsvector(coalesce(number,'')), _weight) INTO _tsvector
+                FROM apartments WHERE objectid = _objectid and isactive;
+        WHEN 12 THEN -- комната
+            SELECT setweight(to_tsvector(coalesce(number,'')), _weight) INTO _tsvector
+                FROM rooms WHERE objectid = _objectid and isactive;
+        WHEN 17 THEN -- парковка
+            SELECT setweight(to_tsvector(coalesce(number,'')), _weight) INTO _tsvector
+                FROM carplaces WHERE objectid = _objectid and isactive;
+        ELSE
+            _tsvector := setweight(to_tsvector(concat_ws('unknown levelid: ', _levelid, ' for objectid: ', _objectid)), _weight);
+    END CASE;
+    IF _debug > 5 THEN
+        RAISE NOTICE 'DEBUG[5]: tsvector: "%"', _tsvector;
+    END IF;
+
+    RETURN _tsvector || coalesce(adm_address_tsvector(_parentobjid, _debug),'');
+
+END
+$BODY$;
+
+COMMENT ON FUNCTION gar.adm_address_tsvector IS 'возвращает to_tsvector по адресу';
