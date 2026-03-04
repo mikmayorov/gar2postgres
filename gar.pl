@@ -245,7 +245,7 @@ sub logging {
     my $msg = shift;
     my $level = shift;
     if ( (! defined $level ) or ( $level <= $cfg{loglevel} ) ) {
-        say strftime("%d.%M.%Y %H:%M:%S ", localtime()) . ' ['.$$ . '] '. $msg;
+        say strftime("%d.%m.%Y %H:%M:%S ", localtime()) . ' ['.$$ . '] '. $msg;
     }
 }
 
